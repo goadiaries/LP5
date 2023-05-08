@@ -1,0 +1,146 @@
+// #include <bits/stdc++.h>
+// #include <omp.h>
+
+// using namespace std;
+
+// int main() {
+//     int n = 1000; // Number of elements
+//     int a[n];
+
+//     for (int i = 0; i < n; i++) {
+//         a[i] = rand()%100000;
+//     }
+
+//     int min = a[0];
+//     int max = a[0];
+//     int sum = 0;
+
+//     double start_time = omp_get_wtime();
+
+//     #pragma omp parallel for reduction(min:min) reduction(max:max) reduction(+:sum)
+//     for (int i = 0; i < n; i++) {
+//         if (a[i] < min) {
+//             min = a[i];
+//         }
+//         if (a[i] > max) {
+//             max = a[i];
+//         }
+//         sum += a[i];
+//     }
+
+//     double end_time = omp_get_wtime();
+
+//     double average = (double)sum / n;
+
+//     cout << "Min: " << min << endl;
+//     cout << "Max: " << max << endl;
+//     cout << "Sum: " << sum << endl;
+//     cout << "Average: " << average << endl;
+//     cout << "Time required: " <<setprecision(10)<< (end_time - start_time) * 1000 << " milliseconds" << endl;
+
+//     return 0;
+// }
+
+
+#include <bits/stdc++.h>
+#include <omp.h>
+
+using namespace std;
+
+const int N = 100000; // Size of input array
+
+int get_min(int arr[]) {
+    int min_val = arr[0];
+
+    #pragma omp parallel for reduction(min:min_val)
+    for (int i = 1; i < N; i++) {
+        if (arr[i] < min_val) {
+            min_val = arr[i];
+        }
+    }
+
+    return min_val;
+}
+
+int get_max(int arr[]) {
+    int max_val = arr[0];
+
+    #pragma omp parallel for reduction(max:max_val)
+    for (int i = 1; i < N; i++) {
+        if (arr[i] > max_val) {
+            max_val = arr[i];
+        }
+    }
+
+    return max_val;
+}
+
+int get_sum(int arr[]) {
+    int sum = 0;
+
+    #pragma omp parallel for reduction(+:sum)
+    for (int i = 0; i < N; i++) {
+        sum += arr[i];
+    }
+
+    return sum;
+}
+
+double get_average(int arr[]) {
+    int sum = get_sum(arr);
+
+    return static_cast<double>(sum) / N;
+}
+
+int main() {
+    int arr[N];
+
+    // Seed the random number generator
+    srand(time(NULL));
+
+    // Generate random input array
+    for (int i = 0; i < N; i++) {
+        arr[i] = rand() % 100000;
+    }
+
+    double start_time_min = omp_get_wtime();
+    int min_val = get_min(arr);
+    double end_time_min = omp_get_wtime();
+    double time_min = end_time_min - start_time_min;
+
+    double start_time_max = omp_get_wtime();
+    int max_val = get_max(arr);
+    double end_time_max = omp_get_wtime();
+    double time_max = end_time_max - start_time_max;
+
+    double start_time_sum = omp_get_wtime();
+    int sum = get_sum(arr);
+    double end_time_sum = omp_get_wtime();
+    double time_sum = end_time_sum - start_time_sum;
+
+    double start_time_average = omp_get_wtime();
+    double average = get_average(arr);
+    double end_time_average = omp_get_wtime();
+    double time_average = end_time_average - start_time_average;
+
+    cout<<"Array of Numbers : "<<endl;
+    for(int i = 0; i < N; i++){
+        cout<<arr[i]<<" ";
+    }cout<<endl;
+
+    // Print the results
+    cout << "Minimum value: " << min_val << endl;
+    cout << "Time required for minimum: "<< setprecision(10) << time_min * 1000 << " milliseconds"<< endl;
+
+    cout << "Maximum value: " << max_val << endl;
+    cout << "Time required for maximum: "<< setprecision(10) << time_max *1000<< " milliseconds"<< endl;
+
+    cout << "Sum: " << sum << endl;
+    cout << "Time required for sum: "<< setprecision(10) << time_sum* 1000<< " milliseconds" << endl;
+
+    cout << "Average: " << average << endl;
+    cout << "Time required for average: "<< setprecision(10) << time_average *1000 << " milliseconds"<< endl;
+
+    return 0;
+}
+
