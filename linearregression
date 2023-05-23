@@ -1,63 +1,54 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Read the dataset
+df = pd.read_csv("HousingData.csv")
+df.head()
+
+# Info. about dataset
+df.info()
+
+# Data Cleaning
+df.isnull().sum()
+df["CRIM"].fillna(df["CRIM"].mean(), inplace=True) # fill CRIM with mean value
+df["ZN"].fillna(0, inplace=True) # fill ZN with mode value, because 360 of the entries are 0
+df["INDUS"].fillna(df["INDUS"].mean(), inplace=True) # fill INDUS with mean value
+df["CHAS"].fillna(0, inplace=True) # fill CHAS with mode value, bec\ause 452 of the entries are 0
+df["AGE"].fillna(df["AGE"].mean(), inplace=True) # fill AGE with mean value
+df["LSTAT"].fillna(df["LSTAT"].mean(), inplace=True) # fill LSTAT with mean value
+
+df.isnull().sum()
+
+X = df.drop('MEDV',axis=1)
+y = df['MEDV']
+
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X,y, random_state = 42)
+
+lr = LinearRegression()
+lr.fit(X_train, y_train)
+
+y_pred = lr.predict(X_test)
+
+lr.score(X_test,y_test)
+
 import tensorflow as tf
-from tensorflow.keras.datasets import boston_housing
-from sklearn import preprocessing
 
-(train_x, train_y), (test_x, test_y) = boston_housing.load_data()
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(13,  activation='relu'),
+    tf.keras.layers.Dense(16, activation = 'relu'),
+    tf.keras.layers.Dense(32, activation = 'relu'),
+    tf.keras.layers.Dense(16, activation = 'relu'),
+    tf.keras.layers.Dense(1, activation='linear')
+])
 
-print("Train shape : ", train_x.shape)
-print("Test shape : ", test_x.shape)
-print("Actual Train Output : ", train_y.shape)
-print("Actual Test Output : ", test_y.shape)
+model.compile(optimizer='adam',loss = tf.keras.losses.MeanSquaredError())
 
-train_x[0]
+model.fit(X_train,y_train,epochs=50)
 
-train_y[0]
-
-train_x = preprocessing.normalize(train_x)
-test_x = preprocessing.normalize(test_x)
-
-train_x[0]
-
-train_y[0]
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import *
-
-def HousePredictionModel():
-  model = Sequential()
-  model.add(Dense(128, activation = 'relu', input_shape = (train_x[0].shape)))
-  model.add(Dense(64, activation = 'relu'))
-  model.add(Dense(32, activation = 'relu'))
-
-  model.add(Dense(1))
-
-  model.compile(optimizer = 'rmsprop', loss = 'mse', metrics = ['mae'])
-
-  return model
-
-
-import numpy as np
-k = 4
-num_val_samples = len(train_x)
-num_epochs = 30
-all_scores = []
-
-model = HousePredictionModel()
-hostory = model.fit(x = train_x, y = train_y, epochs = num_epochs, batch_size = 1, verbose = 1, validation_data = (test_x, test_y))
-
-model.summary()
-
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import classification_report
-from sklearn.metrics import confusion_matrix
-import numpy as np
-
-y_pred =model.predict(test_x)
-
-from sklearn.metrics import r2_score
-r2 = r2_score(test_y, y_pred)
-print(r2)
-
-from sklearn.metrics import mean_squared_error
-rmse = (np.sqrt(mean_squared_error(test_y, y_pred)))
-print(rmse)
+model.evaluate(X_test, y_test)
