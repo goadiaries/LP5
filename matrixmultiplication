@@ -1,147 +1,140 @@
-%%cu 
-#include <stdio.h>
-#include <math.h>
-#include <time.h>
 #include <iostream>
 #include "cuda_runtime.h"
+#include <time.h>
 
-// Define matrix size
-#define N 16
+using namespace std;
 
-__global__ void matrix_multiply(float *a, float *b, float *c) { 
-    // Calculate thread index
+_global_ void gpuMult(int *d_A, int *d_B, int *d_C, int m, int n, int k)
+{
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int temp = 0;
 
-    // Calculate the product of two matrices
-    float sum = 0;
-    for (int i = 0; i < N; i++) {
-        sum += a[row * N + i] * b[i * N + col];
+    if (row < m && col < k)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            temp += d_A[n * row + i] * d_B[k * i + col];
+        }
+        d_C[k * row + col] = temp;
     }
-    c[row * N + col] = sum;
 }
 
-void matrixMultiplication(float *a ,float *b ,float *c) {
- 
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            float sum = 0;
-            for (int k = 0; k < N; k++) {
-                sum += a[i * N+ k] * b[k * N + j];
+void cpuMult(int *A, int *B, int *C, int m, int n, int k)
+{
+    for (int row = 0; row < m; row++)
+    {
+        for (int col = 0; col < k; col++)
+        {
+            int temp = 0;
+            for (int i = 0; i < n; i++)
+            {
+                temp += A[n * row + i] * B[k * i + col];
             }
-            c[i * N + j] = sum;
+            C[k * row + col] = temp;
         }
     }
-    
-       // Print the result matrix
-          printf("\nMatrix result using normal function : \n");
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", c[i * N + j]);
-        }
-        printf("\n");
-    }
-    printf("\n-----------------------------------------------------------------------");
-    
 }
 
+bool verify(int m, int k, int *C, int *D)
+{
+    for (int row = 0; row < m; row++)
+    {
+        for (int col = 0; col < k; col++)
+        {
 
+            if (C[k * row + col] != D[k * row + col])
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
-int main() {
-    float *a, *b, *c,*d;  // Pointers to matrices in host memory
-    float *dev_a, *dev_b, *dev_c;  // Pointers to matrices in device memory
-    int size = N * N * sizeof(float);
+int main()
+{
+    clock_t start, end;
+    int m, n, k;
+    cout << "Enter m, n, k : ";
+    cin >> m >> n >> k;
 
-    // Allocate memory for matrices in host memory
-    a = (float *)malloc(size);
-    b = (float *)malloc(size);
-    c = (float *)malloc(size);
-    d = (float *)malloc(size);
+    int *A = new int[m * n];
+    int *B = new int[n * k];
+    int *C = new int[m * k];
+    int *D = new int[m * k];
 
-    // Initialize matrices with random values
-    for (int i = 0; i < N * N; i++) {
-        a[i] = rand() % 100;
-        b[i] = rand() % 100;
+    // Randomly initilize the matrix A
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            A[i * n + j] = rand() % 1000;
+        }
     }
 
-    // Allocate memory for matrices in device memory
-    cudaMalloc((void **)&dev_a, size);
-    cudaMalloc((void **)&dev_b, size);
-    cudaMalloc((void **)&dev_c, size);
+    // Randomly initilize the matrix B
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < k; j++)
+        {
+            B[i * k + j] = rand() % 1000;
+        }
+    }
 
-    // Copy matrices from host memory to device memory
-    cudaMemcpy(dev_a, a, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b, size, cudaMemcpyHostToDevice);
+    // CPU Matrix Mult
+    start = clock();
+    cpuMult(A, B, C, m, n, k);
+    end = clock();
 
-    // Define the grid and block dimensions
-    dim3 dimGrid(N / 16, N / 16);
-    dim3 dimBlock(16, 16);
+    double CPUTime = ((float)(end - start)) / CLOCKS_PER_SEC;
+    cout << "CPU Time : " << CPUTime << endl;
 
-    // Call the kernel function
+    // Allocate memory in GPU
+    int *d_A, *d_B, *d_C;
+    cudaMalloc(&d_A, sizeof(int) * m * n);
+    cudaMalloc(&d_B, sizeof(int) * n * k);
+    cudaMalloc(&d_C, sizeof(int) * m * k);
 
-    clock_t tic, toc;
-    tic = clock();
-    matrix_multiply<<<dimGrid, dimBlock>>>(dev_a, dev_b, dev_c);
+    // Copy Host Matrix to Device
+    cudaMemcpy(d_A, A, sizeof(int) * m * n, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, sizeof(int) * n * k, cudaMemcpyHostToDevice);
+
+    // Run the kernel
+    int NUM_THREADS = 32;
+    int block_row = (m + NUM_THREADS - 1) / NUM_THREADS;
+    int block_col = (k + NUM_THREADS - 1) / NUM_THREADS;
+
+    dim3 BLOCKS(block_col, block_row);
+    dim3 THREAD(NUM_THREADS, NUM_THREADS);
+
+    start = clock();
+    gpuMult<<<BLOCKS, THREAD>>>(d_A, d_B, d_C, m, n, k);
     cudaDeviceSynchronize();
-    toc = clock();
 
-    float timeTakenGPU = ((float)(toc - tic)) / CLOCKS_PER_SEC;
+    end = clock();
+    double GPUTime = ((float)(end - start)) / CLOCKS_PER_SEC;
+    cout << "GPU Time : " << GPUTime << endl;
 
-    // Copy the result matrix from device memory to host memory
-    cudaMemcpy(c, dev_c, size, cudaMemcpyDeviceToHost);
+    // Copy Result back to Host Memory
+    cudaMemcpy(D, d_C, sizeof(int) * m * k, cudaMemcpyDeviceToHost);
 
-       // Print the A matrix
-       printf("Matrix A : \n");
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", a[i * N + j]);
-        }
-        printf("\n");
+    // validate results computed by GPU
+    bool result = verify(m, k, C, D);
+    if (!result)
+    {
+        cout << "Verification Failed" << endl;
     }
-    printf("\n---------------------------------------------------------------------------------\n");
-
-       // Print the B matrix
-       printf("Matrix B : \n");
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", b[i * N + j]);
-        }
-        printf("\n");
+    else
+    {
+        cout << "Verification Passed" << endl;
     }
-      printf("\n---------------------------------------------------------------------------------");
 
-    // normal 
-     // CPU
-   
+    cout << "SpeedUp : " << CPUTime / GPUTime << endl;
 
-    tic = clock();
-    matrixMultiplication(a,b,d);
-    toc = clock();
-
-  float timeTakenCPU =(float) ((toc - tic)) / CLOCKS_PER_SEC;
-    
-    // Print the result matrix parallel
-       printf("\nMatrix Result using cuda : \n");
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            printf("%f ", c[i * N + j]);
-        }
-        printf("\n");
-    }
-    printf("----------------------------------------------------------------------------------\n");
-  
-    // Free memory
-    free(a);
-    free(b);
-    free(c);
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    cudaFree(dev_c);
-
-    printf("\n ");
-   printf("CPU Time: %f \n", timeTakenCPU);
-   printf("GPU Time: %f \n", timeTakenGPU);
-   printf("Speed Up: %f \n", timeTakenCPU/timeTakenGPU);
-
+    // Free the memory
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
     return 0;
 }
