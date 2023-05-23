@@ -1,100 +1,103 @@
-%%cu
-//vector addition CUDA  1
-#include<iostream>
-#include<time.h>
-#define SIZE 100000
+#include "cuda_runtime.h"
+#include <iostream>
+#include <cstdlib>
+#include <time.h>
+#include <iomanip>
+
 using namespace std;
 
-__global__ void addVect(int *vect1 ,int *vect2 , int *resultVect){
-    int i = threadIdx.x + blockDim.x * blockIdx.x;
-    resultVect[i] = vect1[i] + vect2[i];
+_global_ void addVec(int N, int *arr1, int *arr2, int *arr3)
+{
+    int tId = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (tId < N)
+    {
+        arr3[tId] = arr1[tId] + arr2[tId];
+    }
 }
 
-int main(){
-    int *d_inVect1,*d_inVect2,*d_outResultVector;   //data storage for gpu
-    int vect1[SIZE],vect2[SIZE],resultVect[SIZE];   // data storage for cpu
-    cudaEvent_t gpu_start,gpu_stop;
-    float gpu_elapsed_time;
-
-    // Initializing both the vectors
-    for(int i = 0 ; i < SIZE ; i++){
-        vect1[i] = rand()%1000;
-        vect2[i] = rand()%1000;
+void cpuAdd(int N, int arr1[], int arr2[], int arr3[])
+{
+    for (int i = 0; i < N; i++)
+    {
+        arr3[i] = arr1[i] + arr2[i];
     }
-    // Parallel code
+}
 
-    // Allocate memory on GPU for 3 vectors
-    cudaMalloc((void**)&d_inVect1,SIZE*(sizeof(int)));
-    cudaMalloc((void**)&d_inVect2,SIZE*(sizeof(int)));
-    cudaMalloc((void**)&d_outResultVector,SIZE*(sizeof(int)));
-
-    // COPY the vector contents
-    cudaMemcpy(d_inVect1,vect1,SIZE*sizeof(int),cudaMemcpyHostToDevice);
-    cudaMemcpy(d_inVect2,vect2,SIZE*sizeof(int),cudaMemcpyHostToDevice);
-
-    
-    cudaEventCreate(&gpu_start);
-    cudaEventCreate(&gpu_stop);
-    cudaEventRecord(gpu_start,0);
-
-    
-    int blk = SIZE/1024;
-    
-    
-    addVect<<<blk+1,1024>>>(d_inVect1,d_inVect2,d_outResultVector);
-    cudaDeviceSynchronize();
-    cudaEventRecord(gpu_stop,0);
-    
-    cudaMemcpy(resultVect,d_outResultVector,SIZE*sizeof(int),cudaMemcpyDeviceToHost);
-    
-    //cudaEventSynchronize(gpu_stop);
-    cudaEventElapsedTime(&gpu_elapsed_time,gpu_start,gpu_stop);
-    cudaEventDestroy(gpu_start);
-    cudaEventDestroy(gpu_stop);
-
-    cout<<"INPUT VECTOR 1 : "<<endl;
-    for(int i = 0; i < SIZE; i++){
-        cout<<vect1[i]<<" ";
-    }cout<<endl;
-
-    cout<<"INPUT VECTOR 2 : "<<endl;
-    for(int i = 0; i < SIZE; i++){
-        cout<<vect2[i]<<" ";
-    }cout<<endl;
-
-    cout<<"RESULT VECTOR ! : "<<endl;
-    for(int i = 0; i < SIZE; i++){
-        cout<<resultVect[i]<<" ";
-    }cout<<endl;
-
-    cout<<"The time taken by GPU is :"<<gpu_elapsed_time<<endl;
-    
-    // verify that the GPU did the work we requested
-    bool success = true;
-    int total=0;
-    cout<<"\n Checking "<<SIZE<<" values in the array.......\n";
-    for (int i=0; i<SIZE; i++) {
-        if ((vect1[i] + vect2[i]) != resultVect[i]) {
-            printf( "Error:  %d + %d != %d\n", vect1[i], vect2[i], resultVect[i] );
-            success = false;
+bool verify(int N, int *C, int *D)
+{
+    for (int i = 0; i < N; i++)
+    {
+        if (C[i] != D[i])
+        {
+            return false;
         }
-        total += 1;
     }
-    if (success)  cout<<"We did it "<<total<<"  values correct!\n";
 
-    // Sequential code of vector addition with time measurement
-    clock_t startTime = clock();
-    int resultVect2[SIZE];
-    for(int i = 0 ; i < SIZE ; i++){
-        resultVect2[i] = vect1[i] + vect2[i];
+    return true;
+}
+
+int main()
+{
+    int N;
+    clock_t start, end;
+    double CPUTime, GPUTime;
+    srand(time(NULL));
+    cout << "Enter the value of N : ";
+    cin >> N;
+
+    int *A = new int[N];
+    int *B = new int[N];
+    int *C = new int[N];
+    int *D = new int[N];
+
+    for (int i = 0; i < N; i++)
+    {
+        A[i] = rand() % 1000;
+        B[i] = rand() % 1000;
     }
-    clock_t endTime = clock();
-     cout<<"\nTime for sequential: "<<((float)(endTime-startTime)/CLOCKS_PER_SEC)*1000;
-     cout<<"\nAll results are correct!!!, \n Speedup = "<<((float)(endTime-startTime)/CLOCKS_PER_SEC)*1000 / gpu_elapsed_time<<"\n";
-     // free the memory we allocated on the GPU
-     cudaFree(d_inVect1);
-     cudaFree(d_inVect2);
-     cudaFree(d_outResultVector);
-  
+
+    // CPU Addition
+    start = clock();
+    cpuAdd(N, A, B, C);
+    end = clock();
+    CPUTime = ((float)(end - start)) / CLOCKS_PER_SEC;
+    cout << "CPUTime : " << CPUTime << endl;
+
+    // Allocate memory to GPU
+    int *d_A, *d_B, *d_C;
+    cudaMalloc(&d_A, sizeof(int) * N);
+    cudaMalloc(&d_B, sizeof(int) * N);
+    cudaMalloc(&d_C, sizeof(int) * N);
+
+    // Copy Host Vector to Device
+    cudaMemcpy(d_A, A, sizeof(int) * N, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, sizeof(int) * N, cudaMemcpyHostToDevice);
+
+    // Run the kernel
+    start = clock();
+    addVec<<<N / 2 + 1, 2>>>(N, d_A, d_B, d_C);
+    cudaDeviceSynchronize();
+    end = clock();
+    GPUTime = ((float)(end - start)) / CLOCKS_PER_SEC;
+    cout << "GPUTime : " << GPUTime << endl;
+
+    // Copy Result back to CPU memory
+    cudaMemcpy(D, d_C, sizeof(int) * N, cudaMemcpyDeviceToHost);
+
+    // Verify the answer
+    bool result = verify(N, C, D);
+
+    if (!result)
+    {
+        cout << "Verification Failed";
+    }
+    else
+    {
+        cout << "Verification Passed!";
+    }
+
+    cout << "\nSpeedUp : " << fixed << setprecision(10) << CPUTime / GPUTime << endl;
+
     return 0;
 }
